@@ -1,3 +1,4 @@
+
 # 智能机器人 API
 
 FastAPI + SQLite 的流式聊天机器人。前端为纯 HTML/CSS/原生 JS 页面，由后端 `StaticFiles` 挂载，无需单独启动前端服务。
@@ -103,3 +104,27 @@ pytest -q
 
 - `*.db`、`.env`、`.chat_history.json` 已列入 `.gitignore`，不随仓库提交。
 - API Key 仅保存在服务端，不下发到前端。
+
+# 智能机器人 (FastAPI 智能聊天机器人)
+
+基于 FastAPI 和 DeepSeek 大语言模型构建的智能对话 API 服务。
+
+## 🚀 项目简介
+本项目提供了一个包含对话、会话管理、流式输出及英语学习辅助功能的 RESTful API。
+
+## ⚙️ 快速启动
+
+### 1. 克隆并安装依赖
+```bash
+git clone  https://github.com/123add123add431/intelligent-robot.git 
+cd intelligent-robot
+pip install -r requirements.txt
+
+API_KEY=sk-fb40e8ba35f04ad8b4696c0cbd013801
+MODEL_NAME=deepseek-chat
+BASE_URL=https://api.deepseek.com/v1
+
+uvicorn main:app --reload
+
+pytest tests/ -v
+
