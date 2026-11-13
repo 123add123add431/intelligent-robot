@@ -8,7 +8,6 @@ def test_default_settings(monkeypatch):
     monkeypatch.delenv("API_KEY", raising=False)
     monkeypatch.delenv("MODEL_NAME", raising=False)
     monkeypatch.delenv("BASE_URL", raising=False)
-    # 清空缓存
     import importlib
     import config
     importlib.reload(config)
@@ -30,10 +29,7 @@ def test_secret_str_not_exposed():
 
 
 def test_missing_api_key_raises():
-    """测试缺少 API Key 时提示并退出"""
-    import importlib
-    import sys
-    # 模拟 get_settings 被无 key 调用
+    """测试缺少 API Key 时为空串"""
     from config import Settings
     from pydantic import SecretStr
     s = Settings(api_key=SecretStr(""))
@@ -48,18 +44,18 @@ def test_get_settings_with_key(monkeypatch):
     importlib.reload(config)
     from config import get_settings
     s = get_settings()
-    assert s.model_name == "gpt-3.5-turbo"
+    assert s.model_name == "deepseek-chat"          # ← 改这里
 
 
 def test_base_url_default():
     """测试默认 base_url"""
     from config import Settings
     s = Settings(api_key=SecretStr("sk-test"))
-    assert s.base_url == "https://api.openai.com/v1"
+    assert s.base_url == "https://api.deepseek.com/v1"   # ← 改这里
 
 
 def test_model_name_default():
     """测试默认模型名"""
     from config import Settings
     s = Settings(api_key=SecretStr("sk-test"))
-    assert s.model_name == "gpt-3.5-turbo"
+    assert s.model_name == "deepseek-chat"          # ← 改这里
