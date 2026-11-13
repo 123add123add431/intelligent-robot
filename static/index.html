@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <link rel="icon" href="data:,">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能机器人</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+           background: #f3f4f6; height: 100vh; display: flex; flex-direction: column; }
+    header { background: #2563eb; color: #fff; padding: 12px 18px;
+             display: flex; align-items: center; gap: 10px; }
+    header h1 { font-size: 17px; font-weight: 600; flex: 1; }
+    header button { background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.4);
+                    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    header button:hover { background: rgba(255,255,255,.3); }
+    #sessions { background: #eef2ff; padding: 8px 18px; font-size: 13px; color: #3730a3;
+                display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .chip { background: #fff; border: 1px solid #c7d2fe; padding: 4px 10px; border-radius: 14px;
+            cursor: pointer; }
+    .chip.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    #chat { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 72%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; }
+    .user { align-self: flex-end; background: #2563eb; color: #fff; }
+    .bot { align-self: flex-start; background: #fff; border: 1px solid #e5e7eb; color: #111827; }
+    footer { display: flex; gap: 8px; padding: 12px 18px; background: #fff; border-top: 1px solid #e5e7eb; }
+    footer select, footer input { padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+    footer input { flex: 1; }
+    footer button { background: #2563eb; color: #fff; border: none; padding: 0 18px;
+                    border-radius: 8px; cursor: pointer; font-size: 14px; }
+    footer button:disabled { opacity: .6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>智能机器人 · 聊天</h1>
+    <button id="btn-new">新建会话</button>
+    <button id="btn-clear">清空当前会话</button>
+  </header>
+
+  <div id="sessions"></div>
+
+  <div id="chat"></div>
+
+  <footer>
+    <select id="action">
+      <option value="chat">普通聊天</option>
+      <option value="word">单词讲解</option>
+      <option value="correct">语法纠错</option>
+      <option value="quiz">知识出题</option>
+    </select>
+    <input id="input" type="text" placeholder="输入消息，回车发送..." autocomplete="off" />
+    <button id="btn-send">发送</button>
+  </footer>
+
+  <script>
+    // 纯原生 JS，无任何前端框架；API Key 不在前端出现，全部由后端持有。
+    let currentSession = null;
+
+    const chatEl = document.getElementById("chat");
+    const inputEl = document.getElementById("input");
+    const actionEl = document.getElementById("action");
+    const sessionsEl = document.getElementById("sessions");
+    const sendBtn = document.getElementById("btn-send");
+
+    function addMsg(role, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + (role === "user" ? "user" : "bot");
+      div.textContent = text;
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return div;
+    }
+
+    async function api(path, opts) {
+      const res = await fetch(path, opts);
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail);
+      }
+      return res.json();
+    }
+
+    async function loadSessions() {
+      const list = await api("/sessions");
+      sessionsEl.innerHTML = "会话：";
+      if (!list.length) {
+        const span = document.createElement("span");
+        span.textContent = "（暂无，点上方新建）";
+        sessionsEl.appendChild(span);
+        return;
+      }
+      list.forEach(function (sid) {
+        const chip = document.createElement("span");
+        chip.className = "chip" + (sid === currentSession ? " active" : "");
+        chip.textContent = sid;
+        chip.onclick = function () { switchSession(sid); };
+        sessionsEl.appendChild(chip);
+      });
+    }
+
+    async function loadHistory(sid) {
+      chatEl.innerHTML = "";
+      const msgs = await api("/sessions/" + encodeURIComponent(sid) + "/messages");
+      msgs.forEach(function (m) { addMsg(m.role, m.content); });
+    }
+
+    async function switchSession(sid) {
+      currentSession = sid;
+      await loadSessions();
+      await loadHistory(sid);
+    }
+
+    async function newSession() {
+      const data = await api("/sessions", { method: "POST" });
+      currentSession = data.session_id;
+      chatEl.innerHTML = "";
+      await loadSessions();
+    }
+
+    async function clearSession() {
+      if (!currentSession) { alert("还没有会话"); return; }
+      await api("/sessions/" + encodeURIComponent(currentSession), { method: "DELETE" });
+      currentSession = null;
+      chatEl.innerHTML = "";
+      await loadSessions();
+    }
+
+    async function send() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+      if (!currentSession) { await newSession(); }
+      sendBtn.disabled = true;
+      addMsg("user", text);
+      inputEl.value = "";
+      try {
+        const data = await api("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: currentSession,
+            message: text,
+            action: actionEl.value
+          })
+        });
+        addMsg("assistant", data.reply);
+        await loadSessions();
+      } catch (e) {
+        addMsg("assistant", "出错了：" + e.message);
+      } finally {
+        sendBtn.disabled = false;
+        inputEl.focus();
+      }
+    }
+
+    sendBtn.onclick = send;
+    document.getElementById("btn-new").onclick = newSession;
+    document.getElementById("btn-clear").onclick = clearSession;
+    inputEl.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") send();
+    });
+
+    // 初始化：恢复已有会话列表
+    loadSessions();
+  </script>
+</body>
+</html>
