@@ -1,6 +1,8 @@
+
 fastapi
 uvicorn
 openai
 pydantic
 pytest
 httpx
+sqlalchemy>=2.0

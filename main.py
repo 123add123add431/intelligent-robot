@@ -1,3 +1,4 @@
+
 """智能机器人 API —— FastAPI 入口。
 
 职责：
@@ -130,9 +131,8 @@ async def chat_endpoint(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=_friendly_error(e))
 
-    # 调用成功后再落库，避免留下没有回复的孤儿消息
-    store.add_message(request.session_id, "user", request.message)
-    store.add_message(request.session_id, "assistant", ai_content)
+    # 调用成功后成对落库：用户消息与回复在同一事务写入，失败不留半轮
+    store.add_round(request.session_id, request.message, ai_content)
 
     return ChatResponse(session_id=request.session_id, reply=ai_content)
 
@@ -156,9 +156,8 @@ async def chat_stream_endpoint(request: ChatRequest):
             yield "data: [ERROR] " + _friendly_error(e) + "\n\n"
             return
 
-        # 流正常结束后成对落库
-        store.add_message(request.session_id, "user", request.message)
-        store.add_message(request.session_id, "assistant", full_response)
+        # 流正常结束后在同一事务成对落库
+        store.add_round(request.session_id, request.message, full_response)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -180,11 +179,13 @@ async def get_sessions():
 
 
 @app.get("/sessions/{session_id}/messages")
-async def get_session_messages(session_id: str):
+async def get_session_messages(session_id: str, keyword: str | None = None):
     # 用 session_exists 判断，不能用 `in list_sessions()`（那是 dict 列表）
     if not store.session_exists(session_id):
         raise HTTPException(status_code=404, detail="会话不存在")
-    return {"session_id": session_id, "messages": store.get_messages(session_id)}
+    # keyword 为空返回完整历史；非空按关键词过滤（ORM contains 查询）
+    return {"session_id": session_id,
+            "messages": store.get_messages(session_id, keyword)}
 
 
 @app.delete("/sessions/{session_id}")
